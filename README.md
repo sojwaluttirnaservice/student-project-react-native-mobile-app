@@ -1,0 +1,1 @@
+# student-project-react-native-mobile-app
