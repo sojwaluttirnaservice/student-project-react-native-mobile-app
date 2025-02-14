@@ -13,46 +13,21 @@ import { useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useState } from 'react';
 import axios from 'axios';
-import { BlurView } from 'expo-blur';
 
 import ServerImage from '@/components/image/ServerImage';
+import { useAuth } from '@/contexts/AuthContext';
+import { useToast } from '@/contexts/ToastCotext';
 
 const { width } = Dimensions.get('window');
-
-// Mock data - replace with your API data
-const propertyData = {
-    id: 1,
-    title: 'Luxury Villa with Ocean View',
-    price: 1500000,
-    location: '123 Ocean Drive, Miami Beach, FL',
-    description:
-        'Stunning luxury villa with breathtaking ocean views. This modern masterpiece features 5 bedrooms, 6 bathrooms, and premium finishes throughout. Enjoy the infinity pool, private beach access, and state-of-the-art smart home technology.',
-    features: [
-        '5 Bedrooms',
-        '6 Bathrooms',
-        'Infinity Pool',
-        'Ocean View',
-        'Smart Home',
-        'Private Beach Access',
-        '5,000 sq ft',
-        '2 Car Garage',
-    ],
-    images: [
-        'https://www.shutterstock.com/image-photo/houses-on-green-grass-over-260nw-543073564.jpg',
-        'https://www.shutterstock.com/image-photo/houses-on-green-grass-over-260nw-543073564.jpg',
-        'https://www.shutterstock.com/image-photo/houses-on-green-grass-over-260nw-543073564.jpg',
-    ],
-    agent: {
-        name: 'John Smith',
-        phone: '+1 234 567 8900',
-        email: 'john@realestate.com',
-    },
-};
 
 export default function PropertyDetails() {
     const { id } = useLocalSearchParams();
 
-    const [property, setProperty] = useState(null);
+    const { showSuccessToast, showErrorToast, showWarningToast } = useToast();
+
+    const { authState } = useAuth();
+
+    let [property, setProperty] = useState(null);
     let [thumbnailPath, setThumbnailPath] = useState('');
     let [galleryPath, setGalleryPath] = useState('');
 
@@ -71,9 +46,7 @@ export default function PropertyDetails() {
             }
         };
 
-        setTimeout(() => {
-            fetchProperty();
-        }, 2000);
+        fetchProperty();
 
         return () => {
             setProperty(null);
@@ -82,7 +55,12 @@ export default function PropertyDetails() {
 
     const handleCallAgent = async () => {
         try {
-            const phoneNumber = propertyData.agent.phone.replace(/\s+/g, ''); // Remove spaces
+            if (!authState?.authenticated) {
+                // console.error('Kindly login first for calling');
+                showWarningToast('Kindly login first for calling');
+                return;
+            }
+            const phoneNumber = property?.owner_contact.replace(/\s+/g, ''); // Remove spaces
             await Linking.openURL(`tel:${phoneNumber}`);
         } catch (err) {
             console.error('Error opening phone dialer:', err);
@@ -162,30 +140,23 @@ export default function PropertyDetails() {
                                 <Text style={styles.description}>{property.description}</Text>
                             </View>
 
-                            <BlurView intensity={50}>
-                                {/* Amenities */}
-                                {property.amenities && (
-                                    <View style={styles.section}>
-                                        <Text style={styles.sectionTitle}>Amenities</Text>
-                                        <View style={styles.amenitiesGrid}>
-                                            {property.amenities.map((amenity, index) => (
-                                                <View key={index} style={styles.amenityItem}>
-                                                    <Ionicons
-                                                        name="checkmark-circle"
-                                                        size={20}
-                                                        color="#007AFF"
-                                                    />
-                                                     <BlurView intensity={50} style={styles.blurContainer}>
-                                                    <Text style={styles.amenityText}>
-                                                        {amenity}
-                                                    </Text>
-                                                    </BlurView> 
-                                                </View>
-                                            ))}
-                                        </View>
-                                    </View>
-                                )}
-                            </BlurView>
+                            {/* Amenities Section */}
+                            <View style={styles.section}>
+                                <Text style={styles.sectionTitle}>Amenities</Text>
+                                <View style={styles.amenitiesContainer}>
+                                    {property.amenities &&
+                                        property.amenities.map((amenity, index) => (
+                                            <View key={index} style={styles.amenityItem}>
+                                                <Ionicons
+                                                    name="checkmark-circle"
+                                                    size={20}
+                                                    color="#007AFF"
+                                                />
+                                                <Text style={styles.amenityText}>{amenity}</Text>
+                                            </View>
+                                        ))}
+                                </View>
+                            </View>
 
                             {/* Agent Info */}
                             <View style={styles.section}>
@@ -193,14 +164,11 @@ export default function PropertyDetails() {
                                 <View style={styles.agentContainer}>
                                     <Ionicons name="person-circle" size={50} color="#007AFF" />
                                     <View style={styles.agentInfo}>
-                                        <Text style={styles.agentName}>
-                                            {propertyData.agent.name}
-                                        </Text>
+                                        <Text style={styles.agentName}>{property.owner_name}</Text>
                                         <Text style={styles.agentContact}>
-                                            {propertyData.agent.phone}
-                                        </Text>
-                                        <Text style={styles.agentContact}>
-                                            {propertyData.agent.email}
+                                            {authState.authenticated
+                                                ? property.owner_contact
+                                                : property.owner_contact?.slice(0, -4) + 'XXXX'}
                                         </Text>
                                     </View>
                                 </View>
@@ -295,27 +263,17 @@ const styles = StyleSheet.create({
         marginTop: 2,
     },
 
-    blurContainer: {
-        flex: 1,
-        padding: 20,
-        margin: 16,
-        textAlign: 'center',
-        justifyContent: 'center',
-        overflow: 'hidden',
-        borderRadius: 20,
-      },
-
-
-    amenitiesGrid: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
+    amenitiesContainer: {
+        backgroundColor: '#f8f8f8',
+        borderRadius: 10,
+        padding: 15,
         marginTop: 10,
     },
     amenityItem: {
         flexDirection: 'row',
         alignItems: 'center',
+        paddingVertical: 8,
         width: '50%',
-        marginBottom: 10,
     },
     amenityText: {
         marginLeft: 8,

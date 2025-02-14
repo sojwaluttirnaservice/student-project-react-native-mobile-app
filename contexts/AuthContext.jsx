@@ -8,6 +8,7 @@ import * as SecureStore from 'expo-secure-store';
 axios.defaults.baseURL = process.env.EXPO_PUBLIC_API_URL || 'http://your-api-url.com';
 
 import { createContext, useContext, useEffect, useState } from 'react';
+import { useToast } from './ToastCotext';
 
 // Creating an AuthContext using createContext() function
 // This will be used to share authentication state throughout the app
@@ -30,6 +31,8 @@ let initialAuthState = {
 const TOKEN_KEY = 'jwtToken';
 
 export const AuthProvider = ({ children }) => {
+    const { showSuccessToast, showErrorToast, showWarningToast } = useToast();
+
     const [authState, setAuthState] = useState(initialAuthState);
 
     let isDevProjectMode = process.env.EXPO_PUBLIC_PROJECT_ENV == 'DEV';
@@ -54,7 +57,17 @@ export const AuthProvider = ({ children }) => {
 
     const signup = async (signupData) => {
         try {
-            const result = await axios.post(`/auth/signup`, signupData);
+            const _response = await axios.post(`/auth/signup`, signupData);
+
+            const { success, message, data } = _response.data;
+
+            if (success) {
+                // TODO: ADD THE TOASTIFY MESSAGE IN HERE
+                showSuccessToast(message);
+                router.push('/user/login');
+            } else {
+                console.log(message);
+            }
         } catch (err) {
             console.log(err);
         }
@@ -62,9 +75,9 @@ export const AuthProvider = ({ children }) => {
 
     const login = async (email, password, role = 'user') => {
         // Setting dummy values for testing when mode is of DEV
-        if (isDevProjectMode) {
-            (email = 'john.doe@example.com'), (password = 'password123');
-        }
+        // if (isDevProjectMode) {
+        //     (email = 'john.doe@example.com'), (password = 'password123');
+        // }
 
         try {
             const result = await axios.post(`/auth/login`, {
@@ -80,6 +93,7 @@ export const AuthProvider = ({ children }) => {
             const { token, user } = data;
 
             if (success) {
+                showSuccessToast(message);
                 // TODO: ADD THE TOASTIFY MESSAGE IN HERE
                 setAuthState({
                     token,
@@ -94,18 +108,22 @@ export const AuthProvider = ({ children }) => {
                 router.push('/(tabs)/search');
             } else {
                 //TODO: SHOW THE MESSAGE LATER
+                showWarningToast(message);
             }
 
             return result;
         } catch (err) {
-            console.error(`Error while authenticating`, err.message);
+            // console.error(`Error while authenticating`, err.message);
+            if (err?.response) {
+                showErrorToast(err.response.data.message);
+            }
             return err;
         }
     };
 
     const logout = async () => {
         try {
-            console.log('Clicking on logout');
+            // console.log('Clicking on logout');
             // DELETE THE TOKEN KEY
             await SecureStore.deleteItemAsync(TOKEN_KEY);
 
@@ -115,14 +133,18 @@ export const AuthProvider = ({ children }) => {
 
             // SET THE AUTH STATE TO INIITIAL LIKE WITHOUT LOGIN
             setAuthState(initialAuthState);
+            showSuccessToast('Logged out successfully');
             router.push('/(tabs)/search');
         } catch (err) {
-            console.error(err);
+            // console.error(err);
+            if (err?.response) {
+                showErrorToast(err.response.data.message);
+            }
         }
     };
 
     let value = {
-        onSignUp: signup,
+        onSignup: signup,
         onLogin: login,
         onLogout: logout,
         authState,

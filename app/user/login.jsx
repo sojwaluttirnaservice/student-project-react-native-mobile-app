@@ -1,10 +1,21 @@
-import { View, Text, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
+import {
+    View,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    StyleSheet,
+    KeyboardAvoidingView,
+    Platform,
+} from 'react-native';
 import { useState } from 'react';
 import { Link, router } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
+import { useToast } from '@/contexts/ToastCotext';
 
 export default function Login() {
+    const { showSuccessToast, showErrorToast, showWarningToast } = useToast();
+
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
 
@@ -17,53 +28,57 @@ export default function Login() {
     };
 
     return (
-        <View style={styles.container}>
-            <View style={styles.formContainer}>
-                <Text style={styles.title}>Login</Text>
+        <KeyboardAvoidingView
+            style={styles.container}
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+            <View style={styles.container}>
+                <View style={styles.formContainer}>
+                    <Text style={styles.title}>Login</Text>
 
-                <TextInput
-                    style={styles.input}
-                    placeholder="Username"
-                    value={username}
-                    onChangeText={setUsername}
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    editable={true}
-                    keyboardType="default"
-                />
+                    <TextInput
+                        style={styles.input}
+                        placeholder="Username"
+                        value={username}
+                        onChangeText={setUsername}
+                        autoCapitalize="none"
+                        autoCorrect={false}
+                        editable={true}
+                        keyboardType="default"
+                    />
 
-                <TextInput
-                    style={styles.input}
-                    placeholder="Password"
-                    value={password}
-                    onChangeText={setPassword}
-                    secureTextEntry
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    editable={true}
-                />
+                    <TextInput
+                        style={styles.input}
+                        placeholder="Password"
+                        value={password}
+                        onChangeText={setPassword}
+                        secureTextEntry
+                        autoCapitalize="none"
+                        autoCorrect={false}
+                        editable={true}
+                    />
 
-                <TouchableOpacity style={styles.loginButton} onPress={handleLogin}>
-                    <Text style={styles.loginButtonText}>Login</Text>
-                </TouchableOpacity>
+                    <TouchableOpacity style={styles.loginButton} onPress={handleLogin}>
+                        <Text style={styles.loginButtonText}>Login</Text>
+                    </TouchableOpacity>
 
-                <View style={styles.signupContainer}>
-                    <Text style={styles.signupText}>Don't have an account? </Text>
-                    <Link href="/user/signup" asChild>
-                        <TouchableOpacity>
-                            <Text style={styles.signupLink}>Sign Up</Text>
-                        </TouchableOpacity>
-                    </Link>
+                    <View style={styles.signupContainer}>
+                        <Text style={styles.signupText}>Don't have an account? </Text>
+                        <Link href="/user/signup" asChild>
+                            <TouchableOpacity>
+                                <Text style={styles.signupLink}>Sign Up</Text>
+                            </TouchableOpacity>
+                        </Link>
+                    </View>
+
+                    <TouchableOpacity
+                        style={styles.backToHomeButton}
+                        onPress={() => router.push('/(tabs)/search')}>
+                        <Ionicons name="arrow-back" size={20} color="#666" />
+                        <Text style={styles.backToHomeText}>Back to Home</Text>
+                    </TouchableOpacity>
                 </View>
-
-                <TouchableOpacity
-                    style={styles.backToHomeButton}
-                    onPress={() => router.push('/(tabs)/search')}>
-                    <Ionicons name="arrow-back" size={20} color="#666" />
-                    <Text style={styles.backToHomeText}>Back to Home</Text>
-                </TouchableOpacity>
             </View>
-        </View>
+        </KeyboardAvoidingView>
     );
 }
 

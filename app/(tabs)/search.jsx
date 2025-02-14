@@ -1,50 +1,26 @@
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
+import {
+    View,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    StyleSheet,
+    ScrollView,
+    ActivityIndicator,
+    KeyboardAvoidingView,
+    Platform,
+} from 'react-native';
 import { useState, useEffect, useCallback } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import axios from 'axios';
 import ServerImage from '@/components/image/ServerImage';
-
-// Using your dummy properties format
-const dummyProperties = [
-    {
-        id: 1,
-        title: 'Property 1',
-        location: 'Location 1',
-        price: 100000,
-        image: 'https://via.placeholder.com/150',
-    },
-    {
-        id: 2,
-        title: 'Property 2',
-        location: 'Location 2',
-        price: 200000,
-        image: 'https://via.placeholder.com/150',
-    },
-    {
-        id: 3,
-        title: 'Property 3',
-        location: 'Location 3',
-        price: 300000,
-        image: 'https://via.placeholder.com/150',
-    },
-    {
-        id: 4,
-        title: 'Property 4',
-        location: 'Location 4',
-        price: 400000,
-        image: 'https://via.placeholder.com/150',
-    },
-    {
-        id: 5,
-        title: 'Property 5',
-        location: 'Location 5',
-        price: 500000,
-        image: 'https://via.placeholder.com/150',
-    },
-];
+import { toast } from '@/components/utils/toast';
+import { useNotification } from '@/contexts/NotificationContext';
+import { useToast } from '@/contexts/ToastCotext';
 
 export default function Search() {
+    const { showSuccessToast, showErrorToast, showWarningToast } = useToast();
+
     const [searchQuery, setSearchQuery] = useState('');
     const [debouncedQuery, setDebouncedQuery] = useState('');
     const [suggestions, setSuggestions] = useState([]);
@@ -53,7 +29,21 @@ export default function Search() {
 
     const [thumbnailPath, setThumbnailPath] = useState('');
 
-    const [feedProperties, setFeedProperties] = useState([]);
+    const [feedProperties, setFeedProperties] = useState(null);
+
+    const [filters, setFilters] = useState({
+        status: null,
+        type: null,
+        priceRange: null,
+    });
+
+    // Property status options
+    const statusOptions = [
+        { label: 'For Sale', value: 'For Sale' },
+        { label: 'For Rent', value: 'For Rent' },
+        { label: 'Sold', value: 'Sold' },
+        { label: 'Rented', value: 'Rented' },
+    ];
 
     // When this component will mount for first time, it will
     // automatically fetch the properties from the database
@@ -68,6 +58,7 @@ export default function Search() {
                 const response = await axios.get('/property');
 
                 setFeedProperties(response.data?.data?.properties || []);
+
                 setThumbnailPath(response.data?.data?.thumbnailPath || '');
             } catch (err) {
                 console.error('Error fetching properties:', err);
@@ -97,27 +88,92 @@ export default function Search() {
 
     const handleSearch = useCallback(async () => {
         try {
+            // Set the state to indicate that the search is in progress
             setIsSearching(true);
 
-            const response = await axios.get(`/property/search?q=${debouncedQuery}`);
+            // Dynamically build the query parameters for the API request
+            const queryParams = {
+                // If debouncedQuery exists, add 'q' parameter to the query
+                ...(debouncedQuery && { q: debouncedQuery }),
 
-            // console.log(response.data.data.properties)
+                // If filters.status exists, add 'status' parameter to the query
+                ...(filters.status && { status: filters.status }),
+
+                // If filters.type exists, add 'type' parameter to the query
+                ...(filters.type && { type: filters.type }),
+
+                // If filters.priceRange exists, add 'price' parameter to the query
+                ...(filters.priceRange && { price: filters.priceRange }),
+
+                // Always include a 'limit' parameter to limit the results
+                limit: 5,
+            };
+
+            // Convert the queryParams object into a query string,
+            // removing any null or undefined values
+            const queryString = Object.entries(queryParams)
+                .filter(([_, value]) => value != null) // Filter out any key-value pairs where the value is null or undefined
+                .map(([key, value]) => `${key}=${value}`) // Convert the key-value pairs into a 'key=value' format
+                .join('&'); // Join all the parameters together with '&'
+
+            // Make the GET request to the backend with the constructed query string
+            const response = await axios.get(`/property/search?${queryString}`);
+
+            // If the response contains properties, set them as suggestions
             setSuggestions(response.data.data.properties || []);
+
+            // Show the suggestions list after receiving the response
             setShowSuggestions(true);
         } catch (error) {
-            console.error('Search error:', error);
+            // Log any errors that occur during the search request
+            // console.error('Search error:', error);
+            if (error.response) {
+                showErrorToast(error.response.data.message);
+            }
         } finally {
+            // Set the state to indicate that the search is complete (whether successful or not)
             setIsSearching(false);
         }
-    }, [debouncedQuery]);
+    }, [debouncedQuery, filters]); // The search function depends on debouncedQuery and filters
 
     const handlePropertySelect = (property) => {
-        setSearchQuery(property.title);
-        setShowSuggestions(false);
-        // Handle property selection (e.g., navigate to property details)
-        // console.log('Selected property:', property);
+        setSearchQuery(
+            `${property.address}, ${property.city}, ${property.state}, ${property.country}, ${property.zipcode}`
+        );
 
-        router.push(`/property/${property.id}`);
+        let queryParams = {
+            address: property.address,
+            city: property.city,
+            state: property.state,
+            country: property.country,
+            zipcode: property.zipcode,
+            status: filters.status || property.status,
+        };
+
+        let generateQuery = (object) => {
+            return Object.entries(object)
+                .map(([key, value]) => {
+                    return `${encodeURIComponent(key)}=${encodeURIComponent(value)}`;
+                })
+                .join('&');
+        };
+
+        let searchQuery = generateQuery(queryParams);
+
+        const handleSearch = async () => {
+            try {
+                const response = await axios.get(`/property/search?${searchQuery}&multiple=true`);
+
+                console.log(response.data.data);
+                setFeedProperties(response.data.data.properties || []);
+            } catch (err) {
+                console.error(err);
+            }
+        };
+
+        handleSearch();
+
+        setShowSuggestions(false);
     };
 
     return (
@@ -150,35 +206,71 @@ export default function Search() {
                     )}
                 </View>
 
+                {/* Filter Pills */}
+                <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    style={styles.filterContainer}>
+                    {statusOptions.map((option) => (
+                        <TouchableOpacity
+                            key={option.value}
+                            style={[
+                                styles.filterPill,
+                                filters.status === option.value && styles.filterPillActive,
+                            ]}
+                            onPress={() => {
+                                setFilters((prev) => ({
+                                    ...prev,
+                                    status: prev.status === option.value ? null : option.value,
+                                }));
+                            }}>
+                            <Text
+                                style={[
+                                    styles.filterPillText,
+                                    filters.status === option.value && styles.filterPillTextActive,
+                                ]}>
+                                {option.label}
+                            </Text>
+                        </TouchableOpacity>
+                    ))}
+                </ScrollView>
+
                 {/* Suggestions */}
 
                 {showSuggestions && suggestions.length > 0 ? (
-                    <View style={styles.suggestionsContainer}>
-                        {suggestions.map((property) => (
-                            <TouchableOpacity
-                                key={property.id}
-                                style={styles.suggestionItem}
-                                onPress={() => handlePropertySelect(property)}>
-                                <View style={styles.propertyInfo}>
-                                    <Text style={styles.propertyTitle}>{property.title}</Text>
-                                    {/* <Text style={styles.propertyLocation}>{property.location}</Text>
-                                    <Text style={styles.propertyPrice}>
-                                        ${property.price.toLocaleString()}
-                                    </Text> */}
-                                </View>
-                            </TouchableOpacity>
-                        ))}
-                    </View>
+                    <>
+                        {/* <KeyboardAvoidingView
+                            style={styles.container}
+                            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}> */}
+                        <View style={styles.suggestionsContainer}>
+                            {suggestions.map((property) => (
+                                <TouchableOpacity
+                                    key={property.id}
+                                    style={styles.suggestionItem}
+                                    onPress={() => handlePropertySelect(property)}>
+                                    <View style={styles.propertyInfo}>
+                                        <Text style={styles.propertyTitle}>{property.title}</Text>
+                                        <Text style={styles.propertyLocation}>
+                                            {`${property.address}, ${property.city}, ${property.state}, ${property.country}, ${property.zipcode}`}
+                                        </Text>
+                                    </View>
+                                </TouchableOpacity>
+                            ))}
+                        </View>
+                        {/* </KeyboardAvoidingView> */}
+                    </>
                 ) : (
                     <>
                         {showSuggestions && (
-                            <View style={styles.suggestionItem}>
-                                <View style={styles.propertyInfo}>
-                                    <Text style={styles.propertyTitle}>
-                                        No matching results found
-                                    </Text>
-                                </View>
-                            </View>
+                            <>
+                                {/* <View style={styles.suggestionItem}>
+                                    <View style={styles.propertyInfo}>
+                                        <Text style={styles.propertyTitle}>
+                                            No matching results found
+                                        </Text>
+                                    </View>
+                                </View> */}
+                            </>
                         )}
                     </>
                 )}
@@ -187,66 +279,76 @@ export default function Search() {
             {/* Scrollable Content */}
             <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
                 <View>
-                    {feedProperties.map((feedProperty, propertyIndex) => {
-                        return (
-                            <View key={feedProperty.id} style={styles.propertyCard}>
-                                <ServerImage
-                                    path={`${thumbnailPath}/${feedProperty.thumbnail_image}`}
-                                    style={styles.propertyImage}
-                                    contentFit="cover"
-                                />
-                                <View style={styles.cardOverlay} />
-                                <View style={styles.priceTag}>
-                                    <Text style={styles.propertyPrice}>
-                                        {feedProperty.price.toLocaleString()} INR
-                                    </Text>
-                                </View>
-                                <View style={styles.cardContent}>
-                                    <Text style={styles.propertyTitle} numberOfLines={1}>
-                                        {feedProperty.title}
-                                    </Text>
-                                    <View style={styles.locationContainer}>
-                                        <Ionicons name="location" size={16} color="#666" />
-                                        <Text style={styles.propertyLocation} numberOfLines={1}>
-                                            {feedProperty.location}
+                    {!feedProperties && <ActivityIndicator size={40} />}
+                    {feedProperties &&
+                        feedProperties.map((feedProperty, propertyIndex) => {
+                            return (
+                                <View key={feedProperty.id} style={styles.propertyCard}>
+                                    <ServerImage
+                                        path={`${thumbnailPath}/${feedProperty.thumbnail_image}`}
+                                        style={styles.propertyImage}
+                                        contentFit="cover"
+                                    />
+                                    <View style={styles.cardOverlay} />
+                                    <View style={styles.priceTag}>
+                                        <Text style={styles.propertyPrice}>
+                                            {feedProperty.price.toLocaleString()} INR
                                         </Text>
                                     </View>
-
-                                    <View style={styles.propertyFeatures}>
-                                        <View style={styles.featureItem}>
-                                            <Ionicons name="bed-outline" size={16} color="#666" />
-                                            <Text style={styles.featureText}>3 beds</Text>
-                                        </View>
-                                        <View style={styles.featureItem}>
-                                            <Ionicons name="water-outline" size={16} color="#666" />
-                                            <Text style={styles.featureText}>2 baths</Text>
-                                        </View>
-                                        <View style={styles.featureItem}>
-                                            <Ionicons
-                                                name="square-outline"
-                                                size={16}
-                                                color="#666"
-                                            />
-                                            <Text style={styles.featureText}>1,500 sqft</Text>
+                                    <View style={styles.cardContent}>
+                                        <Text style={styles.propertyTitle} numberOfLines={1}>
+                                            {feedProperty.title}
+                                        </Text>
+                                        <View style={styles.locationContainer}>
+                                            <Ionicons name="location" size={16} color="#666" />
+                                            <Text style={styles.propertyLocation} numberOfLines={1}>
+                                                {`${feedProperty.address}, ${feedProperty.city}, ${feedProperty.state}, ${feedProperty.country}, ${feedProperty.zipcode}`}
+                                            </Text>
                                         </View>
 
-                                        <TouchableOpacity
-                                            onPress={() =>
-                                                router.push(`/property/${feedProperty.id}`)
-                                            }
-                                            style={styles.showMoreButton}>
-                                            <Ionicons
-                                                name="arrow-forward-circle"
-                                                size={16}
-                                                color="#007AFF"
-                                            />
-                                            <Text style={styles.showMoreText}>Show More</Text>
-                                        </TouchableOpacity>
+                                        <View style={styles.propertyFeatures}>
+                                            <View style={styles.featureItem}>
+                                                <Ionicons
+                                                    name="bed-outline"
+                                                    size={16}
+                                                    color="#666"
+                                                />
+                                                <Text style={styles.featureText}>3 beds</Text>
+                                            </View>
+                                            <View style={styles.featureItem}>
+                                                <Ionicons
+                                                    name="water-outline"
+                                                    size={16}
+                                                    color="#666"
+                                                />
+                                                <Text style={styles.featureText}>2 baths</Text>
+                                            </View>
+                                            <View style={styles.featureItem}>
+                                                <Ionicons
+                                                    name="square-outline"
+                                                    size={16}
+                                                    color="#666"
+                                                />
+                                                <Text style={styles.featureText}>1,500 sqft</Text>
+                                            </View>
+
+                                            <TouchableOpacity
+                                                onPress={() =>
+                                                    router.push(`/property/${feedProperty.id}`)
+                                                }
+                                                style={styles.showMoreButton}>
+                                                <Ionicons
+                                                    name="arrow-forward-circle"
+                                                    size={16}
+                                                    color="#007AFF"
+                                                />
+                                                <Text style={styles.showMoreText}>Show More</Text>
+                                            </TouchableOpacity>
+                                        </View>
                                     </View>
                                 </View>
-                            </View>
-                        );
-                    })}
+                            );
+                        })}
                 </View>
             </ScrollView>
         </View>
@@ -310,10 +412,7 @@ const styles = StyleSheet.create({
         fontWeight: '800',
         color: '#333',
     },
-    propertyLocation: {
-        fontSize: 14,
-        color: '#666',
-    },
+
     propertyPrice: {
         fontSize: 14,
         color: '#007AFF',
@@ -387,13 +486,11 @@ const styles = StyleSheet.create({
     locationContainer: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginBottom: 12,
+        marginBottom: 6,
     },
     propertyLocation: {
         fontSize: 14,
         color: '#666',
-        marginLeft: 4,
-        flex: 1,
     },
     propertyFeatures: {
         flexDirection: 'row',
@@ -425,5 +522,29 @@ const styles = StyleSheet.create({
         fontSize: 14,
         fontWeight: '600',
         marginLeft: 4,
+    },
+    filterContainer: {
+        paddingVertical: 10,
+        paddingHorizontal: 16,
+    },
+    filterPill: {
+        paddingHorizontal: 16,
+        paddingVertical: 8,
+        borderRadius: 20,
+        backgroundColor: '#f0f0f0',
+        marginRight: 8,
+        borderWidth: 1,
+        borderColor: '#e0e0e0',
+    },
+    filterPillActive: {
+        backgroundColor: '#007AFF',
+        borderColor: '#007AFF',
+    },
+    filterPillText: {
+        fontSize: 14,
+        color: '#666',
+    },
+    filterPillTextActive: {
+        color: '#fff',
     },
 });
