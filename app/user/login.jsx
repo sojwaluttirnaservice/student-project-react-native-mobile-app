@@ -16,15 +16,15 @@ import { useToast } from '@/contexts/ToastCotext';
 export default function Login() {
     const { showSuccessToast, showErrorToast, showWarningToast } = useToast();
 
-    const [username, setUsername] = useState('');
+    const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
 
     const { onLogin } = useAuth();
 
     const handleLogin = async () => {
-        // console.log('Login:', { username, password });
+        // console.log('Login:', { email, password });
         // Add your login logic here
-        await onLogin(username, password);
+        await onLogin(email, password);
     };
 
     return (
@@ -37,9 +37,9 @@ export default function Login() {
 
                     <TextInput
                         style={styles.input}
-                        placeholder="Username"
-                        value={username}
-                        onChangeText={setUsername}
+                        placeholder="Email"
+                        value={email}
+                        onChangeText={setEmail}
                         autoCapitalize="none"
                         autoCorrect={false}
                         editable={true}
